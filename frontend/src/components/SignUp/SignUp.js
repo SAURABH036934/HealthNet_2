@@ -5,19 +5,22 @@ import {
     Typography, 
     TextField, 
     Button,
-    CircularProgress // Add this for loading state
+    FormControl,
+    InputLabel,
+    Select,
+    MenuItem,
+    CircularProgress
 } from "@mui/material";
 import { Link, useNavigate } from "react-router-dom";
 import styles from "./SignUp.module.css";
 import SelectInput from "../SelectInput/SelectInput";
 import api from "../../api";
 import { useAuth } from "../../AuthContext";
+import { departments } from "../Dashboard/Doctor/doctorDepartments";
+import { departmentSpecialities } from "../Dashboard/Doctor/departmentSpecialities";
 
 const options = ["Patient", "Staff", "Doctor", "Admin"];
-
-// Email validation regex
 const EMAIL_REGEX = /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i;
-// Password validation regex (min 8 chars, 1 uppercase, 1 lowercase, 1 number)
 const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)[a-zA-Z\d]{8,}$/;
 
 export default function SignUp() {
@@ -37,37 +40,36 @@ export default function SignUp() {
     const [errors, setErrors] = useState({});
     const [isSubmitting, setIsSubmitting] = useState(false);
 
+    // Handle department change
+    const handleDepartmentChange = (event) => {
+        setDepartment(event.target.value);
+        setSpeciality(""); // Reset speciality when department changes
+        if (errors.speciality) {
+            setErrors(prev => ({ ...prev, speciality: null }));
+        }
+    };
+
     // Validation function
     const validateForm = () => {
         const newErrors = {};
 
-        // First Name validation
         if (fname.trim().length < 2) {
             newErrors.fname = "First name must be at least 2 characters";
         }
-
-        // Last Name validation
         if (lname.trim().length < 2) {
             newErrors.lname = "Last name must be at least 2 characters";
         }
-
-        // Email validation
         if (!EMAIL_REGEX.test(email)) {
             newErrors.email = "Please enter a valid email address";
         }
-
-        // Password validation
         if (!PASSWORD_REGEX.test(password)) {
-            newErrors.password = 
-                "Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, and one number";
+            newErrors.password = "Password must be at least 8 characters with uppercase, lowercase and number";
         }
-
-        // Doctor specific validations
         if (user === "Doctor") {
-            if (department.trim().length < 2) {
+            if (!department) {
                 newErrors.department = "Department is required";
             }
-            if (speciality.trim().length < 2) {
+            if (!speciality) {
                 newErrors.speciality = "Speciality is required";
             }
         }
@@ -78,11 +80,8 @@ export default function SignUp() {
 
     const handleSubmit = async (event) => {
         event.preventDefault();
-
-        // Prevent double submission
         if (isSubmitting) return;
 
-        // Validate form
         if (!validateForm()) {
             setAlertMsg("Please fix the errors in the form");
             setAlertType("error");
@@ -93,25 +92,19 @@ export default function SignUp() {
         setIsSubmitting(true);
         setLoader(true);
 
-        // Prepare the data
         const postData = {
             userType: user,
             fname: fname.trim(),
             lname: lname.trim(),
             ...(user === "Doctor" && { 
-                department: department.trim(), 
-                speciality: speciality.trim() 
+                department, 
+                speciality 
             }),
             email: email.trim().toLowerCase(),
             password,
         };
 
         try {
-            console.log('Submitting signup form...', {
-                ...postData,
-                password: '[REDACTED]'
-            });
-
             const response = await api.signup(postData);
             
             if (response.data.error) {
@@ -127,24 +120,14 @@ export default function SignUp() {
                 setLname("");
                 setEmail("");
                 setPassword("");
-
                 setAlertMsg(response.data.msg || "Signup Successful!");
                 setAlertType("success");
                 setAlert(true);
-
-                // Navigate after showing success message
                 setTimeout(() => {
                     navigate("/signin");
                 }, 1500);
             }
         } catch (error) {
-            console.error("Signup error:", {
-                message: error.message,
-                response: error.response?.data,
-                status: error.response?.status
-            });
-
-            // Handle specific error cases
             if (error.response?.status === 409) {
                 setAlertMsg("This email is already registered");
             } else {
@@ -183,34 +166,48 @@ export default function SignUp() {
                     options={options}
                 />
 
+                {/* Doctor Fields */}
                 {user === "Doctor" && (
-                    <TextField
-                        name="department"
-                        required
-                        fullWidth
-                        id="department"
-                        label="Department"
-                        sx={{ marginBottom: "10px" }}
-                        value={department}
-                        onChange={(event) => setDepartment(event.target.value)}
-                        error={!!errors.department}
-                        helperText={errors.department}
-                    />
-                )}
+                    <>
+                        <FormControl fullWidth sx={{ marginBottom: "10px" }} error={!!errors.department}>
+                            <InputLabel>Department</InputLabel>
+                            <Select
+                                value={department}
+                                onChange={handleDepartmentChange}
+                                label="Department"
+                            >
+                                {departments
+                                    .filter(dept => dept !== "All Departments")
+                                    .map((dept) => (
+                                        <MenuItem key={dept} value={dept}>{dept}</MenuItem>
+                                    ))}
+                            </Select>
+                            {errors.department && (
+                                <Typography color="error" variant="caption">{errors.department}</Typography>
+                            )}
+                        </FormControl>
 
-                {user === "Doctor" && (
-                    <TextField
-                        name="speciality"
-                        required
-                        fullWidth
-                        id="speciality"
-                        label="Speciality"
-                        sx={{ marginBottom: "10px" }}
-                        value={speciality}
-                        onChange={(event) => setSpeciality(event.target.value)}
-                        error={!!errors.speciality}
-                        helperText={errors.speciality}
-                    />
+                        <FormControl 
+                            fullWidth 
+                            sx={{ marginBottom: "10px" }} 
+                            error={!!errors.speciality}
+                            disabled={!department}
+                        >
+                            <InputLabel>Speciality</InputLabel>
+                            <Select
+                                value={speciality}
+                                onChange={(e) => setSpeciality(e.target.value)}
+                                label="Speciality"
+                            >
+                                {department && departmentSpecialities[department]?.map((spec) => (
+                                    <MenuItem key={spec} value={spec}>{spec}</MenuItem>
+                                ))}
+                            </Select>
+                            {errors.speciality && (
+                                <Typography color="error" variant="caption">{errors.speciality}</Typography>
+                            )}
+                        </FormControl>
+                    </>
                 )}
 
                 {/* Name Fields */}
